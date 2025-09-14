@@ -1,110 +1,64 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import asyncio
-import os
-import time
 
-TOKEN = os.getenv("TOKEN")  # Bot token
-ROLE_ID = 1416579217000239124  # Role to ping
-GUILD_ID = 1416576228764160182  # Guild ID
+TOKEN = "YOUR_BOT_TOKEN"
+GUILD_ID = 1416576228764160182
+ROLE_ID = 1416579217000239124
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Global variables
+# Global timer state
 timer_task = None
-timer_end = None
+time_left = 0
 
+async def run_timer(ctx, duration):
+    global time_left
+    time_left = duration
+    role = ctx.guild.get_role(ROLE_ID)
 
-async def run_timer(minutes: int, ctx: discord.Interaction):
-    """Runs the timer loop (first custom, then 20-min cycles)."""
-    global timer_end
+    while time_left > 0:
+        if time_left in [180, 120, 60]:  # 3 min, 2 min, 1 min left
+            await ctx.send(f"⏰ {role.mention} — {time_left//60} minutes left!")
+        await asyncio.sleep(1)
+        time_left -= 1
 
-    while True:
-        timer_end = time.time() + minutes * 60
-        await ctx.followup.send(f"⏳ Timer started for {minutes} minutes!")
+    # Timer finished
+    await ctx.send(f"⚠️ {role.mention} Timer finished! Restarting at 20 minutes.")
+    await run_timer(ctx, 20 * 60)  # restart automatically at 20 min
 
-        # Warnings at 3, 2, 1 minutes left
-        if minutes > 3:
-            await asyncio.sleep((minutes - 3) * 60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 3 minutes remaining!")
-            await asyncio.sleep(60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
-            await asyncio.sleep(60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
-            await asyncio.sleep(60)
-        elif minutes == 3:
-            await asyncio.sleep(0)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 3 minutes remaining!")
-            await asyncio.sleep(60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
-            await asyncio.sleep(60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
-            await asyncio.sleep(60)
-        elif minutes == 2:
-            await asyncio.sleep(0)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
-            await asyncio.sleep(60)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
-            await asyncio.sleep(60)
-        elif minutes == 1:
-            await asyncio.sleep(0)
-            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
-            await asyncio.sleep(60)
-        else:
-            await asyncio.sleep(minutes * 60)
-
-        # Timer finished
-        await ctx.followup.send(f"⚡ <@&{ROLE_ID}> Timer ended!")
-
-        # After first cycle, always reset to 20 min
-        minutes = 20
-
-
-@bot.tree.command(name="start", description="Start a timer", guild=discord.Object(id=GUILD_ID))
-async def start(ctx: discord.Interaction, minutes: int):
+@bot.command()
+async def starttimer(ctx, minutes: int = 20):
+    """Start the timer (default 20 minutes)"""
     global timer_task
-    if timer_task and not timer_task.done():
-        await ctx.response.send_message("⚠️ Timer is already running!")
+    if timer_task is not None and not timer_task.done():
+        await ctx.send("❌ A timer is already running.")
         return
 
-    await ctx.response.send_message("✅ Timer started!")
-    timer_task = asyncio.create_task(run_timer(minutes, ctx))
+    timer_task = asyncio.create_task(run_timer(ctx, minutes * 60))
+    await ctx.send(f"✅ Timer started for {minutes} minutes.")
 
-
-@bot.tree.command(name="stop", description="Stop the timer", guild=discord.Object(id=GUILD_ID))
-async def stop(ctx: discord.Interaction):
-    global timer_task, timer_end
-    if timer_task and not timer_task.done():
+@bot.command()
+async def stoptimer(ctx):
+    """Stop the timer"""
+    global timer_task, time_left
+    if timer_task:
         timer_task.cancel()
-        timer_end = None
-        await ctx.response.send_message("🛑 Timer stopped!")
+        timer_task = None
+        time_left = 0
+        await ctx.send("🛑 Timer stopped.")
     else:
-        await ctx.response.send_message("⚠️ No timer is running.")
+        await ctx.send("⚠️ No active timer.")
 
-
-@bot.tree.command(name="timeleft", description="Check remaining time", guild=discord.Object(id=GUILD_ID))
-async def timeleft(ctx: discord.Interaction):
-    global timer_end
-    if not timer_end:
-        await ctx.response.send_message("⚠️ No timer is running.")
-        return
-    remaining = int(timer_end - time.time())
-    if remaining <= 0:
-        await ctx.response.send_message("⚠️ Timer is about to finish.")
-        return
-    mins, secs = divmod(remaining, 60)
-    await ctx.response.send_message(f"⏳ Time left: {mins}m {secs}s")
-
-
-@bot.event
-async def on_ready():
-    print(f"✅ Logged in as {bot.user}")
-    try:
-        await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-        print("✅ Commands synced")
-    except Exception as e:
-        print(f"❌ Sync failed: {e}")
-
+@bot.command()
+async def timeleft(ctx):
+    """Check remaining time"""
+    global time_left
+    if time_left > 0:
+        minutes, seconds = divmod(time_left, 60)
+        await ctx.send(f"⏳ Time left: {minutes}m {seconds}s")
+    else:
+        await ctx.send("⚠️ No active timer.")
 
 bot.run(TOKEN)
