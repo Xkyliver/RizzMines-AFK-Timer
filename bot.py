@@ -1,78 +1,75 @@
+# main.py
 import discord
 from discord.ext import commands
 import asyncio
 import os
+import time
 
-TOKEN = os.getenv("DISCORD_TOKEN")  # get token from Railway
-GUILD_ID = 1416576228764160182      # your server ID
-ROLE_ID = 1416579217000239124       # your AFK role ID
+TOKEN = os.getenv("DISCORD_TOKEN")  # set this in Railway (or replace for local testing)
+GUILD_ID = 1416576228764160182
+ROLE_ID = 1416579217000239124
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Global timer state
+# Global state
 timer_task = None
-time_left = 0
+timer_end = None
 running = False
 
-async def run_timer(interaction, duration):
-    global time_left, running
-    running = True
-    guild = bot.get_guild(GUILD_ID)
-    role = guild.get_role(ROLE_ID)
+async def run_timer(channel: discord.abc.Messageable, initial_duration: int):
+    """Run timer loop: first run uses initial_duration (seconds), afterward 20 minutes cycles."""
+    global timer_end, running, timer_task
 
-    while running:
-        time_left = duration
+    duration = initial_duration
+    try:
+        while running:
+            timer_end = time.time() + duration
+            # announce start in channel (optional)
+            await channel.send(f"⏳ Timer cycle started: **{duration//60}** minutes")
 
-        while time_left > 0 and running:
-            if time_left in [180, 120, 60]:  # 3 min, 2 min, 1 min left
-                await interaction.channel.send(f"⏰ {role.mention} — {time_left // 60} minutes left!")
-            await asyncio.sleep(1)
-            time_left -= 1
+            # Warnings we want (in seconds)
+            warnings = [3*60, 2*60, 60]
 
-        if not running:
-            break
+            for w in warnings:
+                # compute when to warn: warn_at = timer_end - w
+                warn_at = timer_end - w
+                to_sleep = warn_at - time.time()
+                if to_sleep <= 0:
+                    # warning time already passed (timer shorter than this warning) => skip
+                    continue
+                # sleep until that warning
+                await asyncio.sleep(to_sleep)
+                if not running:
+                    return
+                # Send warning
+                await channel.send(f"⚠️ <@&{ROLE_ID}> — **{w//60}** minute{'s' if w//60 > 1 else ''} remaining!")
 
-        # Timer finished
-        await interaction.channel.send(f"⚠️ {role.mention} AFK tokens ready! Restarting at 20 minutes.")
-        duration = 20 * 60  # reset to 20 minutes
+            # sleep until end
+            to_sleep_end = timer_end - time.time()
+            if to_sleep_end > 0:
+                await asyncio.sleep(to_sleep_end)
+            if not running:
+                return
 
-# --- SLASH COMMANDS ---
-@bot.tree.command(name="starttimer", description="Start the AFK timer (default 20 minutes)")
-async def starttimer(interaction: discord.Interaction, minutes: int = 20):
-    global timer_task, running
-    if running:
-        await interaction.response.send_message("❌ A timer is already running.", ephemeral=True)
+            # finished
+            await channel.send(f"⚡ <@&{ROLE_ID}> AFK tokens ready!")
+
+            # after the first cycle, every next cycle uses 20 minutes
+            duration = 20 * 60
+
+    except asyncio.CancelledError:
+        # gracefully stop on cancel
         return
-
-    timer_task = asyncio.create_task(run_timer(interaction, minutes * 60))
-    await interaction.response.send_message(f"✅ Timer started for {minutes} minutes.")
-
-@bot.tree.command(name="stoptimer", description="Stop the AFK timer")
-async def stoptimer(interaction: discord.Interaction):
-    global timer_task, time_left, running
-    if timer_task:
+    finally:
+        # cleanup if we exit loop naturally
+        timer_end = None
         running = False
-        timer_task.cancel()
         timer_task = None
-        time_left = 0
-        await interaction.response.send_message("🛑 Timer stopped.")
-    else:
-        await interaction.response.send_message("⚠️ No active timer.")
 
-@bot.tree.command(name="timeleft", description="Check remaining time")
-async def timeleft(interaction: discord.Interaction):
-    global time_left, running
-    if running and time_left > 0:
-        minutes, seconds = divmod(time_left, 60)
-        await interaction.response.send_message(f"⏳ Time left: {minutes}m {seconds}s")
-    else:
-        await interaction.response.send_message("⚠️ No active timer.")
+# ---------------- SLASH COMMANDS ----------------
+@bot.tree.command(name="ping", description="Check bot is alive", guild=discord.Object(id=GUILD_ID))
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("pong")
 
-# Sync slash commands on startup
-@bot.event
-async def on_ready():
-    await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
-    print(f"✅ Logged in as {bot.user}. Slash commands synced!")
-
-bot.run(TOKEN)
+@bot.tree.command(name="starttimer", description="Start the AFK
