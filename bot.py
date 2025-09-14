@@ -72,4 +72,4 @@ async def run_timer(channel: discord.abc.Messageable, initial_duration: int):
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message("pong")
 
-@bot.tree.command(name="starttimer", description="Start the AFK timer"
+@bot.tree.command(name="starttimer", description="Start the AFK timer") 
