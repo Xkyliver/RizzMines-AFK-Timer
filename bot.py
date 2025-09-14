@@ -31,8 +31,8 @@ async def timer(minutes: int, ctx: discord.Interaction):
         await asyncio.sleep(60)
         await ctx.followup.send(f"⚡ <@&{ROLE_ID}> Timer ended!")
 
-        # After first custom timer, switch to 20-minute cycles
-        minutes = 20
+        # After first custom timer, switch to 18 minutes cycles
+        minutes = 18
 
 
 @bot.tree.command(name="start", description="Start a timer", guild=discord.Object(id=GUILD_ID))
