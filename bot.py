@@ -16,23 +16,49 @@ timer_task = None
 timer_end = None
 
 
-async def timer(minutes: int, ctx: discord.Interaction):
+async def run_timer(minutes: int, ctx: discord.Interaction):
+    """Runs the timer loop (first custom, then 20-min cycles)."""
     global timer_end
 
     while True:
         timer_end = time.time() + minutes * 60
+        await ctx.followup.send(f"⏳ Timer started for {minutes} minutes!")
 
-        # Wait until 1 minute left
-        if minutes > 1:
-            await asyncio.sleep((minutes - 1) * 60)
+        # Warnings at 3, 2, 1 minutes left
+        if minutes > 3:
+            await asyncio.sleep((minutes - 3) * 60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 3 minutes remaining!")
+            await asyncio.sleep(60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
+            await asyncio.sleep(60)
             await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+            await asyncio.sleep(60)
+        elif minutes == 3:
+            await asyncio.sleep(0)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 3 minutes remaining!")
+            await asyncio.sleep(60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
+            await asyncio.sleep(60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+            await asyncio.sleep(60)
+        elif minutes == 2:
+            await asyncio.sleep(0)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 2 minutes remaining!")
+            await asyncio.sleep(60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+            await asyncio.sleep(60)
+        elif minutes == 1:
+            await asyncio.sleep(0)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+            await asyncio.sleep(60)
+        else:
+            await asyncio.sleep(minutes * 60)
 
-        # Wait for final minute
-        await asyncio.sleep(60)
+        # Timer finished
         await ctx.followup.send(f"⚡ <@&{ROLE_ID}> Timer ended!")
 
-        # After first custom timer, switch to 18 minutes cycles
-        minutes = 18
+        # After first cycle, always reset to 20 min
+        minutes = 20
 
 
 @bot.tree.command(name="start", description="Start a timer", guild=discord.Object(id=GUILD_ID))
@@ -42,8 +68,8 @@ async def start(ctx: discord.Interaction, minutes: int):
         await ctx.response.send_message("⚠️ Timer is already running!")
         return
 
-    timer_task = asyncio.create_task(timer(minutes, ctx))
-    await ctx.response.send_message(f"⏳ Timer started for {minutes} minutes!")
+    await ctx.response.send_message("✅ Timer started!")
+    timer_task = asyncio.create_task(run_timer(minutes, ctx))
 
 
 @bot.tree.command(name="stop", description="Stop the timer", guild=discord.Object(id=GUILD_ID))
