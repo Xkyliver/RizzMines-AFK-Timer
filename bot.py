@@ -4,7 +4,7 @@ import asyncio
 import os
 import time
 
-TOKEN = os.getenv("TOKEN")  # Your bot token
+TOKEN = os.getenv("TOKEN")  # Bot token
 ROLE_ID = 1416579217000239124  # Role to ping
 GUILD_ID = 1416576228764160182  # Guild ID
 
@@ -18,24 +18,28 @@ timer_end = None
 
 async def timer(minutes: int, ctx: discord.Interaction):
     global timer_end
-    timer_end = time.time() + minutes * 60
 
-    # Wait until 1 minute left
-    if minutes > 1:
-        await asyncio.sleep((minutes - 1) * 60)
-        await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+    while True:
+        timer_end = time.time() + minutes * 60
 
-    # Wait for final minute
-    await asyncio.sleep(60)
-    await ctx.followup.send("⏰ Timer ended!")
-    timer_end = None
+        # Wait until 1 minute left
+        if minutes > 1:
+            await asyncio.sleep((minutes - 1) * 60)
+            await ctx.followup.send(f"⚠️ <@&{ROLE_ID}> 1 minute remaining!")
+
+        # Wait for final minute
+        await asyncio.sleep(60)
+        await ctx.followup.send(f"⚡ <@&{ROLE_ID}> Timer ended!")
+
+        # After first custom timer, switch to 20-minute cycles
+        minutes = 20
 
 
 @bot.tree.command(name="start", description="Start a timer", guild=discord.Object(id=GUILD_ID))
 async def start(ctx: discord.Interaction, minutes: int):
     global timer_task
     if timer_task and not timer_task.done():
-        await ctx.response.send_message("⚠️ Timer already running!")
+        await ctx.response.send_message("⚠️ Timer is already running!")
         return
 
     timer_task = asyncio.create_task(timer(minutes, ctx))
