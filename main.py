@@ -31,9 +31,10 @@ async def afk(interaction: discord.Interaction, action: str, minutes: int = 18):
     global afk_timer_running, afk_task
     role = interaction.guild.get_role(ROLE_ID)
 
+    await interaction.response.defer(ephemeral=True)  # ✅ respond immediately to avoid timeout
+
     if action.lower() == "start":
         if afk_timer_running:
-            await interaction.response.send_message("⚠️ The AFK timer is already running!", ephemeral=True)
+            await interaction.followup.send("⚠️ The AFK timer is already running!", ephemeral=True)
         else:
             afk_timer_running = True
-            await interaction.re
