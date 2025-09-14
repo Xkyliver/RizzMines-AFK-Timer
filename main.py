@@ -1,63 +1,68 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import asyncio
-
 import os
-TOKEN = os.getenv("TOKEN") 
-GUILD_ID = 1416576228764160182  # Replace with your server ID
-ROLE_ID = 1416579217000239124   # Replace with your role ID
+
+TOKEN = os.getenv("TOKEN")  # Bot token stored as environment variable
+ROLE_ID = 123456789012345678  # Replace with your AFK role ID
 
 intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="/", intents=intents)
 
-# Bot setup
-class MyClient(discord.Client):
-    def __init__(self):
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
-
-    async def setup_hook(self):
-        await self.tree.sync(guild=discord.Object(id=GUILD_ID))
-
-client = MyClient()
-
-# Global control variables
-afk_timer_running = False
-afk_task = None
+afk_task = None  # global task reference
 
 
-@client.tree.command(name="afk", description="AFK timer controls", guild=discord.Object(id=GUILD_ID))
-@app_commands.describe(action="start or stop", minutes="Interval in minutes (default 18)")
-async def afk(interaction: discord.Interaction, action: str, minutes: int = 18):
-    global afk_timer_running, afk_task
-    role = interaction.guild.get_role(ROLE_ID)
+async def afk_cycle(ctx, minutes: int):
+    """Runs one AFK countdown cycle and sends minute-by-minute warnings."""
+    role = ctx.guild.get_role(ROLE_ID)
 
-    if action.lower() == "start":
-        if afk_timer_running:
-            await interaction.response.send_message("⚠️ The AFK timer is already running!", ephemeral=True)
+    # Countdown
+    for remaining in range(minutes, 0, -1):
+        if remaining > 1:
+            await asyncio.sleep(60)
+            if role:
+                await ctx.send(f"⏳ {role.mention} {remaining-1} minutes left...")
         else:
-            afk_timer_running = True
-            await interaction.response.send_message(f"✅ AFK timer started! Pinging {role.mention} every {minutes} minutes.")
-            afk_task = asyncio.create_task(start_afk_timer(interaction.channel, role, minutes))
+            # Final minute
+            await asyncio.sleep(60)
+            if role:
+                await ctx.send(f"⚡ {role.mention} AFK tokens ready!")
 
-    elif action.lower() == "stop":
-        if not afk_timer_running:
-            await interaction.response.send_message("⚠️ No AFK timer is running right now.", ephemeral=True)
+
+@bot.command(name="afk")
+async def afk(ctx, arg="start", custom_minutes: int = None):
+    global afk_task
+
+    if arg.lower() == "start":
+        if afk_task and not afk_task.done():
+            await ctx.send("⚠️ AFK Timer is already running.")
+            return
+
+        async def run_timer():
+            # Run custom cycle once if provided
+            if custom_minutes:
+                await afk_cycle(ctx, custom_minutes)
+
+            # Then repeat the default 18-min cycle forever
+            while True:
+                await afk_cycle(ctx, 18)
+
+        afk_task = asyncio.create_task(run_timer())
+        await ctx.send(
+            f"✅ AFK Timer started ({custom_minutes or 18} minutes, then repeats 18)."
+        )
+
+    elif arg.lower() == "stop":
+        if afk_task and not afk_task.done():
+            afk_task.cancel()
+            await ctx.send("🛑 AFK Timer stopped.")
         else:
-            afk_timer_running = False
-            if afk_task:
-                afk_task.cancel()
-            await interaction.response.send_message("🛑 AFK timer stopped.")
+            await ctx.send("⚠️ No AFK Timer is running.")
 
 
-async def start_afk_timer(channel, role, minutes):
-    global afk_timer_running
-    try:
-        while afk_timer_running:
-            await channel.send(f"{role.mention} ⏰ AFK check!")
-            await asyncio.sleep(minutes * 60)
-    except asyncio.CancelledError:
-        pass
+@bot.event
+async def on_ready():
+    print(f"Bot is online as {bot.user}")
 
 
-client.run(TOKEN)
+bot.run(TOKEN)
