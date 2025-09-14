@@ -5,7 +5,7 @@ import os
 import time
 
 TOKEN = os.getenv("TOKEN")  # Bot token from environment variables
-ROLE_ID = 123456789012345678  # Replace with your AFK role ID
+ROLE_ID = 1416579217000239124  # Replace with your AFK role ID
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="/", intents=intents)
