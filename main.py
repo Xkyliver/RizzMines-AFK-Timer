@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import asyncio
 import os
+import time
 
 TOKEN = os.getenv("TOKEN")  # Bot token from environment variables
 ROLE_ID = 123456789012345678  # Replace with your AFK role ID
@@ -10,10 +11,14 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 afk_task = None  # global task reference
+end_time = None  # when the current cycle ends
 
 
 async def afk_cycle(ctx, minutes: int):
     """Runs one AFK timer cycle with a 1-minute warning."""
+    global end_time
+    end_time = time.time() + minutes * 60  # store when this cycle ends
+
     role = ctx.guild.get_role(ROLE_ID)
 
     # Wait until 1 minute before completion
@@ -38,11 +43,9 @@ async def afk(ctx, arg="start", custom_minutes: int = None):
             return
 
         async def run_timer():
-            # Run custom cycle once if given
             if custom_minutes:
                 await afk_cycle(ctx, custom_minutes)
 
-            # Then repeat default 18-min cycle
             while True:
                 await afk_cycle(ctx, 18)
 
@@ -57,6 +60,22 @@ async def afk(ctx, arg="start", custom_minutes: int = None):
             await ctx.send("🛑 AFK Timer stopped.")
         else:
             await ctx.send("⚠️ No AFK Timer is running.")
+
+
+@bot.command(name="status")
+async def status(ctx):
+    global end_time
+    if end_time:
+        remaining = int(end_time - time.time())
+        if remaining > 0:
+            minutes, seconds = divmod(remaining, 60)
+            await ctx.send(
+                f"⏳ Time left until next ping: **{minutes}m {seconds}s**"
+            )
+        else:
+            await ctx.send("⚠️ Timer cycle is just about to finish.")
+    else:
+        await ctx.send("⚠️ No AFK Timer is running.")
 
 
 @bot.event
