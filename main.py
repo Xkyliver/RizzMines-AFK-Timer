@@ -3,7 +3,7 @@ from discord.ext import commands
 import asyncio
 import os
 
-TOKEN = os.getenv("TOKEN")  # Bot token stored as environment variable
+TOKEN = os.getenv("TOKEN")  # Bot token from environment variables
 ROLE_ID = 123456789012345678  # Replace with your AFK role ID
 
 intents = discord.Intents.default()
@@ -13,20 +13,19 @@ afk_task = None  # global task reference
 
 
 async def afk_cycle(ctx, minutes: int):
-    """Runs one AFK countdown cycle and sends minute-by-minute warnings."""
+    """Runs one AFK timer cycle with a 1-minute warning."""
     role = ctx.guild.get_role(ROLE_ID)
 
-    # Countdown
-    for remaining in range(minutes, 0, -1):
-        if remaining > 1:
-            await asyncio.sleep(60)
-            if role:
-                await ctx.send(f"⏳ {role.mention} {remaining-1} minutes left...")
-        else:
-            # Final minute
-            await asyncio.sleep(60)
-            if role:
-                await ctx.send(f"⚡ {role.mention} AFK tokens ready!")
+    # Wait until 1 minute before completion
+    if minutes > 1:
+        await asyncio.sleep((minutes - 1) * 60)
+        if role:
+            await ctx.send(f"⚠️ {role.mention} 1 minute left...")
+
+    # Final minute
+    await asyncio.sleep(60)
+    if role:
+        await ctx.send(f"⚡ {role.mention} AFK tokens ready!")
 
 
 @bot.command(name="afk")
@@ -39,11 +38,11 @@ async def afk(ctx, arg="start", custom_minutes: int = None):
             return
 
         async def run_timer():
-            # Run custom cycle once if provided
+            # Run custom cycle once if given
             if custom_minutes:
                 await afk_cycle(ctx, custom_minutes)
 
-            # Then repeat the default 18-min cycle forever
+            # Then repeat default 18-min cycle
             while True:
                 await afk_cycle(ctx, 18)
 
