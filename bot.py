@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands, tasks
 import asyncio
 
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = os.getenv("TOKEN")  # Bot token
 GUILD_ID = 1416576228764160182
 ROLE_ID = 1416579217000239124
 
